@@ -4,9 +4,9 @@
 project, using an `add_assetgen_manifest` configuration directive and 
 `AssetGenRequestFactoryMixin`.
 
-Using it allows you code in languages (like CoffeeScript and SASS) that compile
-to JavaScript and CSS, swapping between a refresh-the-page-to-see-changes
-development environment and optimal HTTP caching production setup -- without
+Using it allows you to code in languages (like CoffeeScript and SASS) that
+compile to JavaScript and CSS, swapping between a refresh-the-page-to-see-changes
+development environment and an optimal HTTP caching production setup -- without
 ever having to change any of the code in your [Pyramid][] application.
 
 ## Configuration
