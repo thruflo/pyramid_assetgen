@@ -11,11 +11,20 @@ def _read(file_name):
     return text
     
 
+def _doc():
+    try:
+        import pyramid_assetgen
+    except ImportError:
+        return ''
+    else:
+        return pyramid_assetgen.__doc__
+
 
 setup(
     name = 'pyramid_assetgen',
     version = '0.2',
-    description = 'Integrate ``assetgen`` with a ``pyramid`` project.',
+    description = 'Integrate Assetgen with the Pyramid framework.',
+    long_description = _doc(),
     author = 'James Arthur',
     author_email = 'username: thruflo, domain: gmail.com',
     url = 'http://github.com/thruflo/pyramid_assetgen',

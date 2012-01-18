@@ -1,36 +1,30 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""Provides a py:function:`~pyramid_assetgen.add_assetgen_manifest` 
-  `configuration directive`_ and 
-  py:class:`~pyramid_assetgen.AssetGenRequestMixin` 
-  `custom request factory`_ mixin class that can be used to integrate
-  `Assetgen`_ with a `Pyramid`_ application.
+"""Provides an ``add_assetgen_manifest` `configuration directive`_ and 
+  ``AssetGenRequestMixin`` `custom request factory`_ mixin class that can be
+  used to integrate `Assetgen`_ with a `Pyramid`_ application.
   
   Configure your `Pyramid`_ app (e.g.: in your main / WSGI app factory
   function)::
   
       from pyramid.request import Request
-      class MyRequest(AssetGenRequestMixin, Request):
-          pass
-      
+      class MyRequest(AssetGenRequestMixin, Request): pass
       config.set_request_factory(MyRequest)
       config.add_directive('add_assetgen_manifest', add_assetgen_manifest)
   
-  .. note::
-      
-      The ``AssetGenRequestMixin`` argument must come before ``Request`` in
-      your request factory class definition.
+  (Note that the ``AssetGenRequestMixin`` argument must come before ``Request``
+  in your request factory class definition).
   
   Expose the directory your assetgen'd static files are in as per normal using
-  ``add_static_view`` and then register an assetgen manifest for the dirctory
+  ``add_static_view`` and then register an assetgen manifest for the directory
   you've exposed by calling ``add_assetgen_manifest`` with the same path or
-  pyramid asset specification you passed to ``add_static_view``, e.g.::
+  pyramid asset specification you passed to ``add_static_view``, e.g., assuming
+  you have a manifest file at ``'mypkg:static/assets.json``::
   
       config.add_static_view('static', 'mypkg:static')
       config.add_assetgen_manifest('mypkg:static')
   
-  This assumes you have a manifest file at ``'mypkg:static/assets.json``.
   If your manifest file is somewhere else, use the ``manifest`` keyword argument
   to specify where it is, e.g.::
   
