@@ -14,7 +14,7 @@ def _read(file_name):
 
 setup(
     name = 'pyramid_assetgen',
-    version = '0.1',
+    version = '0.2',
     description = 'Integrate ``assetgen`` with a ``pyramid`` project.',
     author = 'James Arthur',
     author_email = 'username: thruflo, domain: gmail.com',
