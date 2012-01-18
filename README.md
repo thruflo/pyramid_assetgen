@@ -86,7 +86,7 @@ In addition, you'll need to extend the default request factory using, e.g.:
     from pyramid.request import Request
     from pyramid_assetgen import AssetGenRequestMixin
     
-    class MyRequest(Request, AssetGenRequestMixin):
+    class MyRequest(AssetGenRequestMixin, Request):
         pass
     
     config.set_request_factory(MyRequest)
@@ -115,7 +115,7 @@ So, for example, if you have registered a manifest containing:
 
 Calling:
 
-    request.static_url('mypkg:static/foo.js')
+    request.static_path('mypkg:static/foo.js')
 
 Will return:
 
