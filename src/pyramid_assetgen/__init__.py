@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""Provides an ``add_assetgen_manifest` `configuration directive`_ and 
+"""Provides an ``add_assetgen_manifest`` `configuration directive`_ and 
   ``AssetGenRequestMixin`` `custom request factory`_ mixin class that can be
   used to integrate `Assetgen`_ with a `Pyramid`_ application.
   
