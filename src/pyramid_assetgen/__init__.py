@@ -181,7 +181,7 @@ class AssetGenManifest(object):
             return path
         path = self._directory.join(path.split(self._directory)[1:])
         path = self._data.get(path, path)
-        return urlparse.urljoin(self._directory, path)
+        return self._directory + path
     
 
 class AssetGenRequestMixin(object):
@@ -200,7 +200,6 @@ class AssetGenRequestMixin(object):
     """
     
     def _assetgen_expand_path(self, path):
-        path = _resolve_abspath(path)
         for _, manifest in self.registry.getUtilitiesFor(IAssetGenManifest):
             path = manifest.expand(path)
         return path
@@ -217,13 +216,16 @@ def add_assetgen_manifest(config, path, manifest=None, default='assets.json'):
     # Generate an unambiguous absolute path from the ``path`` provided, which,
     # just as with the built in ``add_static_view`` directive can be an absolute
     # or relative path, or an asset specification.
-    static_directory = _resolve_abspath(config._make_spec(path))
+    static_directory = path
     if not static_directory.endswith('/'):
         static_directory += '/'
     
     # Get the abspath to the manifest file to associate with static directory.
     if manifest is None:
-        manifest_file = urlparse.urljoin(static_directory, default)
+        abspath = _resolve_abspath(config._make_spec(static_directory))
+        if not abspath.endswith('/'):
+            abspath += '/'
+        manifest_file = urlparse.urljoin(abspath, default)
     else:
         manifest_file = _resolve_abspath(config._make_spec(manifest))
     
