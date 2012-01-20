@@ -1,4 +1,9 @@
 
+## 0.3
+
+Fixed major bug causing the `add_static_view` integration to break when the
+static view was configured with an asset specification.
+
 ## 0.2.2
 
 Added a strict mode (enabled by default) to the ``AssetGenManifest`` so that

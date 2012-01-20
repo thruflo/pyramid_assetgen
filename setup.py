@@ -22,7 +22,7 @@ def _doc():
 
 setup(
     name = 'pyramid_assetgen',
-    version = '0.2.2',
+    version = '0.3',
     description = 'Integrate Assetgen with the Pyramid framework.',
     long_description = _doc(),
     author = 'James Arthur',
