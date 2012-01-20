@@ -67,6 +67,9 @@ __all__ = [
 
 import json
 import logging
+
+from os.path import exists as path_exists
+
 try: # pragma: no coverage
     import urlparse
 except ImportError: # pragma: no coverage
@@ -111,6 +114,19 @@ class AssetGenManifest(object):
           >>> manifest.expand('not/in/manifest.js') == 'not/in/manifest.js'
           True
       
+      Note that if you don't provide a valid file path, it will complain, (which
+      allows us to throw an error at compile time, rather than when a request
+      happens to come in)::
+      
+          >>> manifest = AssetGenManifest('spec', None)
+          Traceback (most recent call last):
+          ...
+          ValueError: You must provide a manifest file.
+          >>> manifest = AssetGenManifest('spec', '/not/a/valid/path')
+          Traceback (most recent call last):
+          ...
+          IOError: File does not exist: `/not/a/valid/path`.
+      
       Teardown::
       
           >>> os.unlink(f.name)
@@ -120,11 +136,17 @@ class AssetGenManifest(object):
     
     implements(IAssetGenManifest)
     
-    def __init__(self, directory, manifest_file):
+    def __init__(self, directory, manifest_file, strict=True):
         if not directory.endswith('/'):
             directory += '/'
         self._directory = directory
         self._manifest_file = manifest_file
+        if strict:
+            if not self._manifest_file:
+                raise ValueError('You must provide a manifest file.')
+            elif not path_exists(self._manifest_file):
+                msg = 'File does not exist: `{0}`.'.format(self._manifest_file)
+                raise IOError(msg)
     
     @reify
     def _data(self):
@@ -137,7 +159,7 @@ class AssetGenManifest(object):
         """We can safely remove all keys that refer to themselves::
           
               >>> data = {'a': 'a', 'b': 'c'}
-              >>> manifest = AssetGenManifest('spec', None)
+              >>> manifest = AssetGenManifest('spec', None, strict=False)
               >>> manifest._data = manifest._compress(data)
               >>> manifest._data
               {'b': 'c'}
