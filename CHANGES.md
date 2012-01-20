@@ -1,4 +1,14 @@
 
+## 0.2.2
+
+Added a strict mode (enabled by default) to the ``AssetGenManifest`` so that
+if the manifest file doesn't exist, it will throw an error at configure time,
+rather than when the first request happens to come in.
+
+## 0.2.1
+
+Minor tweak to the docs.
+
 ## 0.2
 
 Completely changed the api.  Instead of using:
