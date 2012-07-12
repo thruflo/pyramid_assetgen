@@ -1,72 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""Provides an ``add_assetgen_manifest`` `configuration directive`_ and 
-  ``AssetGenRequestMixin`` `custom request factory`_ mixin class that can be
-  used to integrate `Assetgen`_ with a `Pyramid`_ application.
-  
-  Configure your `Pyramid`_ app (e.g.: in your main / WSGI app factory
-  function)::
-  
-      from pyramid.request import Request
-      class MyRequest(AssetGenRequestMixin, Request): pass
-      config.set_request_factory(MyRequest)
-      config.add_directive('add_assetgen_manifest', add_assetgen_manifest)
-  
-  (Note that the ``AssetGenRequestMixin`` argument must come before ``Request``
-  in your request factory class definition).
-  
-  Expose the directory your assetgen'd static files are in as per normal using
-  ``add_static_view`` and then register an assetgen manifest for the directory
-  you've exposed by calling ``add_assetgen_manifest`` with the same path or
-  pyramid asset specification you passed to ``add_static_view``, e.g., assuming
-  you have a manifest file at ``'mypkg:static/assets.json``::
-  
-      config.add_static_view('static', 'mypkg:static')
-      config.add_assetgen_manifest('mypkg:static')
-  
-  If your manifest file is somewhere else, use the ``manifest`` keyword argument
-  to specify where it is, e.g.::
-  
-      config.add_assetgen_manifest('mypkg:static', manifest='/foo/bar.json')
-  
-  Once configured, you can use ``request.static_path(path, **kw)`` and
-  ``request.static_url(path, **kw)`` as normal, e.g.::
-  
-      request.static_url('mypkg:static/base.js')
-  
-  Under the hood, ``static_url`` will now check the path to the static file
-  you're serving and, if it's in a directory that you've exposed with an
-  assetgen manifest, will look in the manifest file for a key that matches
-  the path (relative to the directory) and, if found, will expand it.
-  
-  So, for example, if you have registered a manifest containing::
-  
-      {'foo.js': 'foo-fdsf465ds4f567ds4ds5674567f4s7.js'}
-  
-  Calling::
-  
-      request.static_url('mypkg:static/foo.js')
-  
-  Will return::
-  
-      '/static/foo-fdsf465ds4f567ds4ds5674567f4s7.js'
-  
-  _`assetgen`: http://pypi.python.org/pypi/assetgen
-  _`configuration directive`: http://readthedocs.org/docs/pyramid/en/latest/narr/extconfig.html
-  _`custom request factory`: http://readthedocs.org/docs/pyramid/en/latest/narr/hooks.html#changing-the-request-factory
-  _`pyramid`: http://readthedocs.org/docs/pyramid
-"""
-
-__all__ = [
-    'IAssetGenManifest',
-    'AssetGenManifest',
-    'AssetGenRequestMixin',
-    'add_assetgen_manifest',
-]
-
 import json
 import logging
+import urllib2
 
 from os.path import exists as path_exists
 
@@ -75,170 +12,243 @@ try: # pragma: no coverage
 except ImportError: # pragma: no coverage
     from urllib import parse as urlparse
 
-from zope.interface import Interface, implements
+from zope.interface import Attribute, Interface, implements
 
 from pyramid.asset import resolve_asset_spec
 from pyramid.decorator import reify
 from pyramid.path import AssetResolver
-from pyramid import request
+from pyramid.request import Request
 
-def _resolve_abspath(spec, resolve_=resolve_asset_spec, Resolver_=AssetResolver):
+def compress_data(data):
+    """Remove all keys from ``data`` that refer to themselves::
+      
+          >>> data = {'a': 'a', 'b': 'c'}
+          >>> compress(data)
+          {'b': 'c'}
+      
+    """
+    
+    compressed = {}
+    for k, v in data.items():
+        if not k == v:
+           compressed[k] = v
+    return compressed
+
+def is_a_url(path_or_url):
+    """Return whether ``path_or_url`` is a URL.  XXX Currently a tad naive.
+      
+          >>> is_a_url('http://google.com')
+          True
+          >>> is_a_url('pkg:dir/path.js')
+          False
+      
+    """
+    
+    return '://' in path_or_url
+
+def open_resource(path_or_url, is_url=None, open_url=None, file_exists=None):
+    """Open a resource, no matter whether it's a URL or a local file."""
+    
+    # Test jig.
+    if is_url is None:
+        is_url = is_a_url
+    if open_url is None:
+        open_url = urllib2.urlopen
+    if file_exists is None:
+        file_exists = path_exists
+    
+    # If it's a URL then use ``open_url``.
+    if is_url(path_or_url):
+        try:
+            sock = open_url(path_or_url)
+        except IOError:
+            pass
+        else:
+            if sock.code == 200:
+                return sock
+    # Otherwise treat it as a file path.
+    if file_exists(path_or_url):
+        return open(path_or_url)
+
+def resolve_abspath(spec, resolve=None, Resolver=None):
     """Resolve an asset spec to an absolute path."""
     
-    pname, filepath = resolve_(spec)
-    return Resolver_(pname).resolve(filepath).abspath()
+    # Test jig.
+    if resolve is None:
+        resolve = resolve_asset_spec
+    if Resolver is None:
+        Resolver = AssetResolver
+    
+    pname, filepath = resolve(spec)
+    return Resolver(pname).resolve(filepath).abspath()
 
 
 class IAssetGenManifest(Interface):
-    """A utility that wraps a data dict of keys to file paths."""
-    
-    def expand(path):
-        """Return the expanded ``path``."""
-    
+    """Marker interface."""
 
 class AssetGenManifest(object):
-    """Lazy load and encapsulate an `Assetgen`_ manifest file.  For example, if
-      we write a trivial manifest data file to disk::
-      
-          >>> import os
-          >>> import tempfile
-          >>> f = tempfile.NamedTemporaryFile(delete=False)
-          >>> l = f.write('{"base.js": "base-1234.js"}'.encode())
-          >>> f.close()
-      
-      We can use it like so::
-      
-          >>> manifest = AssetGenManifest('spec', f.name)
-          >>> manifest.expand('spec/base.js') == 'spec/base-1234.js'
-          True
-          >>> manifest.expand('not/in/manifest.js') == 'not/in/manifest.js'
-          True
-      
-      Note that if you don't provide a valid file path, it will complain, (which
-      allows us to throw an error at compile time, rather than when a request
-      happens to come in)::
-      
-          >>> manifest = AssetGenManifest('spec', None)
-          Traceback (most recent call last):
-          ...
-          ValueError: You must provide a manifest file.
-          >>> manifest = AssetGenManifest('spec', '/not/a/valid/path')
-          Traceback (most recent call last):
-          ...
-          IOError: File does not exist: `/not/a/valid/path`.
-      
-      Teardown::
-      
-          >>> os.unlink(f.name)
-      
-      _`Assetgen`: http://pypi.python.org/pypi/assetgen
+    """Utility that expands static url paths using the data in an assetgen
+      manifest file.
     """
     
     implements(IAssetGenManifest)
     
-    def __init__(self, directory, manifest_file, strict=True):
-        if not directory.endswith('/'):
-            directory += '/'
-        self._directory = directory
-        self._manifest_file = manifest_file
-        if strict:
-            if not self._manifest_file:
-                raise ValueError('You must provide a manifest file.')
-            elif not path_exists(self._manifest_file):
-                msg = 'File does not exist: `{0}`.'.format(self._manifest_file)
-                raise IOError(msg)
-    
-    @reify
-    def _data(self):
-        sock = open(self._manifest_file, 'rb')
+    def __init__(self, manifest, asset_path, serving_path=None, open_=None, compress=None):
+        """Store references to the paths and read in the manifest data."""
+        
+        # Test jig.
+        if open_ is None:
+            open_ = open_resource
+        if compress is None:
+            compress = compress_data
+        
+        # ``self.manifest_file`` is a url or local file path to an assetgen
+        # manifest file.
+        self.manifest_file = manifest
+        
+        # Make sure the manifest file exists.
+        sock = open_(self.manifest_file)
+        if not sock:
+            msg = u'Does not exist: `{0}`.'.format(self.manifest_file)
+            raise IOError(msg)
+        
+        # Read in the data from it.
         data = json.loads(sock.read().decode('UTF-8'))
         sock.close()
-        return self._compress(data)
+        self.data = compress(data)
+        
+        # ``self.asset_path`` is the root directory / asset spec provided
+        # to ``request.static_url()``, e.g.: the ``pkg:dir`` in 
+        # ``request.static_url('pkg:dir/foo.js')``.
+        self.asset_path = asset_path
+        
+        # ``self.serving_path`` is the root directory / asset spec or
+        # url path returned from ``self.expand()``, e.g.:: with a ``serving_path``
+        # of ``http://myassets.com``, a call to ``self.expand('foo.js')`` might
+        # return ``http://myassets.com/foo.js``.
+        if serving_path is None:
+            serving_path = self.asset_path
+        self.serving_path = serving_path
     
-    def _compress(self, data):
-        """We can safely remove all keys that refer to themselves::
-          
-              >>> data = {'a': 'a', 'b': 'c'}
-              >>> manifest = AssetGenManifest('spec', None, strict=False)
-              >>> manifest._data = manifest._compress(data)
-              >>> manifest._data
-              {'b': 'c'}
-              >>> manifest.expand('spec/a')
-              'spec/a'
-              >>> manifest.expand('spec/b')
-              'spec/c'
-          
+    def __json__(self):
+        """JSON representation (can be passed to a template and thus through to
+          ``./coffee/assetgen.coffee``).
         """
         
-        compressed = {}
-        for k, v in data.items():
-            if not k == v:
-               compressed[k] = v
-        return compressed
+        return {
+            'data': self.data, 
+            'asset_path': self.asset_path,
+            'serving_path': self.serving_path
+        }
     
     def expand(self, path):
-        if not path.startswith(self._directory):
+        """Expand a path using the manifest data."""
+        
+        if not path.startswith(self.asset_path):
             return path
-        path = self._directory.join(path.split(self._directory)[1:])
-        path = self._data.get(path, path)
-        return self._directory + path
+        path = self.asset_path.join(path.split(self.asset_path)[1:])
+        return self.serving_path + self.data.get(path, path)
     
 
-class AssetGenRequestMixin(object):
-    """Mixin to a request factory that effectively patches ``self.static_url``
-      with an equivalent that first checks to see if the ``path`` its called
-      with resolves to a static directory that has had an ``IAssetGenManifest``
-      utility registered for it.  If so, the path is expanded by that utility
-      before being passed to the original ``static_url`` function.
-      
-      **Note**: this class must be mixed in as the *first* superclass, e.g.::
-      
-          class MyRequest(AssetGenRequestMixin, Request):
-              pass
-          
-      
+
+def get_static_url(request, is_url=None, request_cls=None):
+    """Returns a manifest aware ``static_url`` function that can be used as a
+      ``request.static_url``.
     """
     
-    def _assetgen_expand_path(self, path):
-        for _, manifest in self.registry.getUtilitiesFor(IAssetGenManifest):
-            path = manifest.expand(path)
-        return path
+    # Test jig.
+    if is_url is None:
+        is_url = is_a_url
+    if request_cls is None:
+        request_cls = Request
     
-    def static_url(self, path, **kw):
-        path = self._assetgen_expand_path(path)
-        return super(AssetGenRequestMixin, self).static_url(path, **kw)
+    # Cache the original static url method.
+    original_static_url = request_cls(request.environ).static_url
     
+    def static_url(path, **kw):
+        original_path = path
+        for _, manifest in request.registry.getUtilitiesFor(IAssetGenManifest):
+            path = manifest.expand(original_path)
+            if path != original_path:
+                break
+        if is_url(path):
+            return path
+        return original_static_url(path, **kw)
+    
+    return static_url
 
+def get_assetgen_manifest(request):
+    """Returns a ``assetgen_manifest`` function to get a registered ``IAssetGenManifest``
+      instance by asset_path.
+    """
+    
+    def assetgen_manifest(asset_path, as_json=False, interface_cls=None, dumps=None):
+        """Get the manifest data registered for ``assets``."""
+        
+        # Test jig.
+        if interface_cls is None:
+            interface_cls = IAssetGenManifest
+        if dumps is None:
+            dumps = json.dumps
+        
+        if not asset_path.endswith('/'):
+            asset_path += '/'
+        manifest = request.registry.getUtility(interface_cls, name=asset_path)
+        if as_json:
+            return json.dumps(manifest.__json__())
+        return manifest
+    
+    return assetgen_manifest
 
-def add_assetgen_manifest(config, path, manifest=None, default='assets.json'):
-    """Register an IAssetGenManifest utility against ``path``."""
+def add_assetgen_manifest(config, asset_path, manifest_file=None, default='assets.json',
+        serving_path=None, is_url=None, resolve=None, join_url=None):
+    """Register an IAssetGenManifest utility."""
     
-    # Generate an unambiguous absolute path from the ``path`` provided, which,
-    # just as with the built in ``add_static_view`` directive can be an absolute
-    # or relative path, or an asset specification.
-    static_directory = path
-    if not static_directory.endswith('/'):
-        static_directory += '/'
+    # Test jig.
+    if is_url is None:
+        is_url = is_a_url
+    if resolve is None:
+        resolve = resolve_abspath
+    if join_url is None:
+        join_url = urlparse.urljoin
     
-    # Get the abspath to the manifest file to associate with static directory.
-    if manifest is None:
-        abspath = _resolve_abspath(config._make_spec(static_directory))
-        if not abspath.endswith('/'):
-            abspath += '/'
-        manifest_file = urlparse.urljoin(abspath, default)
-    else:
-        manifest_file = _resolve_abspath(config._make_spec(manifest))
+    # Make sure the directory paths end with a `/`.
+    if not asset_path.endswith('/'):
+        asset_path += '/'
+    if serving_path and not serving_path.endswith('/'):
+        serving_path += '/'
+    
+    # Get the absolute path to the manifest file.
+    if manifest_file is None:
+        abspath = resolve(config._make_spec(asset_path))
+        manifest_file = join_url(abspath, default)
+    elif not is_url(manifest_file):
+        manifest_file = _resolve_abspath(config._make_spec(manifest_file))
     
     # Register the ``AssetGenManifest`` instance against ``static_directory``.
-    manifest = AssetGenManifest(static_directory, manifest_file)
-    register = config.registry.registerUtility
-    register(manifest, IAssetGenManifest, name=static_directory)
-
+    manifest = AssetGenManifest(manifest_file, asset_path, serving_path=serving_path)
+    config.registry.registerUtility(manifest, IAssetGenManifest, name=asset_path)
 
 def includeme(config):
     """Allow developers to use ``config.include('pyramid_assetgen')`` to register
       the ``add_assetgen_manifest`` configuration directive.
     """
     
+    # Register directive.
     config.add_directive('add_assetgen_manifest', add_assetgen_manifest)
+    
+    # Override ``request.static_url``.
+    config.set_request_property(get_static_url, 'static_url', reify=True)
+    config.set_request_property(get_assetgen_manifest, 'assetgen_manifest', reify=True)
+    
+    # If ``assetgen.assets_path`` is provided in the config, register a 
+    # static view with an assetgen manifest.
+    settings = config.registry.settings
+    if settings.has_key('assetgen.assets_path'):
+        assets_path = settings['assetgen.assets_path']
+        serving_path = settings.get('assetgen.serving_path', assets_path)
+        manifest_file=settings.get('assetgen.manifest_file', None)
+        config.add_static_view('assets', assets_path)
+        config.add_assetgen_manifest(assets_path, serving_path=serving_path, 
+                manifest_file=manifest_file)
 
