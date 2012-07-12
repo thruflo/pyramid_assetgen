@@ -1,4 +1,12 @@
 
+## 0.4
+
+Refactor to support external urls and implicitly register assets when the default
+configuration is provided.
+
+Added coffeescript lib with methods to accept a JSON representation of a
+registered assetgen manifest and generate static urls on the client side.
+
 ## 0.3
 
 Fixed major bug causing the `add_static_view` integration to break when the
