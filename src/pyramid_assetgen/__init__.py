@@ -39,12 +39,14 @@ def is_a_url(path_or_url):
       
           >>> is_a_url('http://google.com')
           True
+          >>> is_a_url('//cdn.com/path.js')
+          True
           >>> is_a_url('pkg:dir/path.js')
           False
       
     """
     
-    return '://' in path_or_url
+    return '://' in path_or_url or path_or_url.startswith('//')
 
 def open_resource(path_or_url, is_url=None, open_url=None, file_exists=None):
     """Open a resource, no matter whether it's a URL or a local file."""
