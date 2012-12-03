@@ -115,7 +115,7 @@ class AssetGenManifest(object):
         # Make sure the manifest file exists.
         sock = open_(self.manifest_file)
         if not sock:
-            msg = u'Does not exist: `{0}`.'.format(self.manifest_file)
+            msg = 'Does not exist: `{0}`.'.format(self.manifest_file)
             raise IOError(msg)
         
         # Read in the data from it.
