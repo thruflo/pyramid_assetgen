@@ -3,7 +3,10 @@
 
 import json
 import logging
-import urllib2
+try: # py2
+    from urllib2 import urlopen
+except ImportError: # py3
+    from urllib.request import urlopen
 
 from os.path import exists as path_exists
 
@@ -12,7 +15,9 @@ try: # pragma: no coverage
 except ImportError: # pragma: no coverage
     from urllib import parse as urlparse
 
-from zope.interface import Attribute, Interface, implements
+from zope.interface import Attribute
+from zope.interface import Interface
+from zope.interface import implementer
 
 from pyramid.asset import resolve_asset_spec
 from pyramid.decorator import reify
@@ -55,7 +60,7 @@ def open_resource(path_or_url, is_url=None, open_url=None, file_exists=None):
     if is_url is None:
         is_url = is_a_url
     if open_url is None:
-        open_url = urllib2.urlopen
+        open_url = urlopen
     if file_exists is None:
         file_exists = path_exists
     
@@ -88,12 +93,11 @@ def resolve_abspath(spec, resolve=None, Resolver=None):
 class IAssetGenManifest(Interface):
     """Marker interface."""
 
+@implementer(IAssetGenManifest)
 class AssetGenManifest(object):
     """Utility that expands static url paths using the data in an assetgen
       manifest file.
     """
-    
-    implements(IAssetGenManifest)
     
     def __init__(self, manifest, asset_path, serving_path=None, open_=None, compress=None):
         """Store references to the paths and read in the manifest data."""
