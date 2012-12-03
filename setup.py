@@ -51,7 +51,7 @@ setup(
     include_package_data = True,
     zip_safe = False,
     install_requires = [
-        'pyramid',
+        'pyramid>=1.3',
     ],
     tests_require = [
         'WebTest >= 1.3.1',
