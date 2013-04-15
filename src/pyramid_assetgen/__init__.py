@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import json
+import hashlib
 import logging
 try: # py2
     from urllib2 import urlopen
