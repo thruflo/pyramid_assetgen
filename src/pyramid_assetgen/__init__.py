@@ -229,7 +229,7 @@ def add_assetgen_manifest(config, asset_path, manifest_file=None, default='asset
         abspath = resolve(config._make_spec(asset_path))
         manifest_file = join_url(abspath, default)
     elif not is_url(manifest_file):
-        manifest_file = _resolve_abspath(config._make_spec(manifest_file))
+        manifest_file = resolve(config._make_spec(manifest_file))
     
     # Register the ``AssetGenManifest`` instance against ``static_directory``.
     manifest = AssetGenManifest(manifest_file, asset_path, serving_path=serving_path)

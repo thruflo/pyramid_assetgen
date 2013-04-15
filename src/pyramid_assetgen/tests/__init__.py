@@ -48,7 +48,7 @@ class TestUsage(unittest.TestCase):
         request = get_current_request()
         
         self.config.add_static_view('static', '/foo')
-        self.config.add_assetgen_manifest('/foo', manifest=self.f.name)
+        self.config.add_assetgen_manifest('/foo', manifest_file=self.f.name)
         
         url = request.static_url('/foo/base.js')
         self.assertTrue(url == 'http://example.com/static/base-1234.js')
@@ -60,7 +60,7 @@ class TestUsage(unittest.TestCase):
         request = get_current_request()
         
         self.config.add_static_view('static', '/foo')
-        self.config.add_assetgen_manifest('/foo', manifest=self.f.name)
+        self.config.add_assetgen_manifest('/foo', manifest_file=self.f.name)
         
         url = request.static_url('/foo/foo.js')
         self.assertTrue(url == 'http://example.com/static/foo.js')
@@ -72,7 +72,7 @@ class TestUsage(unittest.TestCase):
         request = get_current_request()
         
         self.config.add_static_view('static', '/foo')
-        self.config.add_assetgen_manifest('/foo', manifest=self.f.name)
+        self.config.add_assetgen_manifest('/foo', manifest_file=self.f.name)
         
         url = request.static_path('/foo/base.js')
         self.assertTrue(url == '/static/base-1234.js')
