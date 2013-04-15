@@ -28,7 +28,7 @@ def compress_data(data):
     """Remove all keys from ``data`` that refer to themselves::
       
           >>> data = {'a': 'a', 'b': 'c'}
-          >>> compress(data)
+          >>> compress_data(data)
           {'b': 'c'}
       
     """

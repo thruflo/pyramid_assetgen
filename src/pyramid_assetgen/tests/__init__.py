@@ -25,11 +25,11 @@ class TestUsage(unittest.TestCase):
     def setUp(self):
         import os
         import tempfile
-        from pyramid_assetgen import AssetGenRequestMixin
-        class MyRequest(AssetGenRequestMixin, testing.DummyRequest):
-            pass
-        
-        self.config = testing.setUp(request=MyRequest())
+        #from pyramid_assetgen import AssetGenRequestMixin
+        #class MyRequest(AssetGenRequestMixin, testing.DummyRequest):
+        #    pass
+        #
+        self.config = testing.setUp(request=testing.DummyRequest, settings={}) #request=MyRequest())
         self.config.include('pyramid_assetgen')
         self.f = tempfile.NamedTemporaryFile(delete=False)
         self.f.write('{"base.js": "base-1234.js"}'.encode())
