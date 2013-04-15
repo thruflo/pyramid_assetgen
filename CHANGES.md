@@ -1,4 +1,9 @@
 
+## 0.4.1
+
+Provide `request.assetgen_hash(asset_path)` path to get the hash of an assetgen
+manifest.
+
 ## 0.4
 
 Refactor to support external urls and implicitly register assets when the default

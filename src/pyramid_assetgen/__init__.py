@@ -206,6 +206,25 @@ def get_assetgen_manifest(request):
     
     return assetgen_manifest
 
+def get_assetgen_hash(request):
+    """Returns a function that returns the sha224 hash of a registered
+      ``IAssetGenManifest`` identified by asset_path.
+    """
+    
+    def assetgen_hash(asset_path, get_manifest=None, to_digest=None):
+        """Get the hash of the manifest data registered for ``assets``."""
+        
+        # Compose
+        if get_manifest is None:
+            get_manifest = get_assetgen_manifest(request)
+        if to_digest is None:
+            to_digest = lambda s: hashlib.sha224(s).hexdigest()
+        
+        manifest_str = get_manifest(asset_path, as_json=True)
+        return to_digest(manifest_str)
+    
+    return assetgen_hash
+
 def add_assetgen_manifest(config, asset_path, manifest_file=None, default='assets.json',
         serving_path=None, is_url=None, resolve=None, join_url=None):
     """Register an IAssetGenManifest utility."""
@@ -246,6 +265,7 @@ def includeme(config):
     # Override ``request.static_url``.
     config.set_request_property(get_static_url, 'static_url', reify=True)
     config.set_request_property(get_assetgen_manifest, 'assetgen_manifest', reify=True)
+    config.set_request_property(get_assetgen_hash, 'assetgen_hash', reify=True)
     
     # If ``assetgen.assets_path`` is provided in the config, register a 
     # static view with an assetgen manifest.
