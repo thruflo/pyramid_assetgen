@@ -22,9 +22,8 @@ def _doc():
 
 setup(
     name = 'pyramid_assetgen',
-    version = '0.4.1',
+    version = '0.4.2',
     description = 'Integrate Assetgen with the Pyramid framework.',
-    long_description = _doc(),
     author = 'James Arthur',
     author_email = 'username: thruflo, domain: gmail.com',
     url = 'http://github.com/thruflo/pyramid_assetgen',

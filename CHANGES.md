@@ -1,4 +1,8 @@
 
+## 0.4.2
+
+Test rendering README.md on PYPI.
+
 ## 0.4.1
 
 Provide `request.assetgen_hash(asset_path)` path to get the hash of an assetgen
