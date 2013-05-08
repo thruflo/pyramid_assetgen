@@ -1,4 +1,8 @@
 
+## 0.4.3
+
+Include `.coffee` files in source distribution.
+
 ## 0.4.2
 
 Test rendering README.md on PYPI.
