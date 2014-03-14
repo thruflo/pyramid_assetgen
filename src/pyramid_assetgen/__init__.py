@@ -268,7 +268,7 @@ def get_assetgen_hash(request):
         if get_manifest is None:
             get_manifest = get_assetgen_manifest(request)
         
-        manifest = get_manifest(asset_path, as_json=True)
+        manifest = get_manifest(asset_path)
         return manifest.digest
     
     return assetgen_hash
@@ -294,6 +294,8 @@ def add_assetgen_manifest(config, asset_path, manifest_file=None, default='asset
     # Get the absolute path to the manifest file.
     if manifest_file is None:
         abspath = resolve(config._make_spec(asset_path))
+        if not abspath.endswith('/'):
+            abspath += '/'
         manifest_file = join_url(abspath, default)
     elif not is_url(manifest_file):
         manifest_file = resolve(config._make_spec(manifest_file))
