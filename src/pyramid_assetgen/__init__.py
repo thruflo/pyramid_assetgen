@@ -4,6 +4,8 @@
 import json
 import hashlib
 import logging
+import re
+
 try: # py2
     from urllib2 import urlopen
 except ImportError: # py3
@@ -22,8 +24,12 @@ from zope.interface import implementer
 
 from pyramid.asset import resolve_asset_spec
 from pyramid.decorator import reify
+from pyramid.httpexceptions import HTTPNotFound
 from pyramid.path import AssetResolver
 from pyramid.request import Request
+from pyramid.security import NO_PERMISSION_REQUIRED as PUBLIC
+
+valid_digest = re.compile(r'^[a-z0-9]{56}$', re.U)
 
 def compress_data(data):
     """Remove all keys from ``data`` that refer to themselves::
@@ -90,6 +96,9 @@ def resolve_abspath(spec, resolve=None, Resolver=None):
     pname, filepath = resolve(spec)
     return Resolver(pname).resolve(filepath).abspath()
 
+def sha224_digest(s):
+    return hashlib.sha224(s).hexdigest()
+
 
 class IAssetGenManifest(Interface):
     """Marker interface."""
@@ -100,14 +109,13 @@ class AssetGenManifest(object):
       manifest file.
     """
     
-    def __init__(self, manifest, asset_path, serving_path=None, open_=None, compress=None):
+    def __init__(self, manifest, asset_path, serving_path=None, **kwargs):
         """Store references to the paths and read in the manifest data."""
         
-        # Test jig.
-        if open_ is None:
-            open_ = open_resource
-        if compress is None:
-            compress = compress_data
+        # Compose.
+        open_ = kwargs.get('_open', open_resource)
+        compress = kwargs.get('compress', compress_data)
+        to_digest = kwargs.get('to_digest', sha224_digest)
         
         # ``self.manifest_file`` is a url or local file path to an assetgen
         # manifest file.
@@ -136,6 +144,9 @@ class AssetGenManifest(object):
         if serving_path is None:
             serving_path = self.asset_path
         self.serving_path = serving_path
+        
+        # Set the digest.
+        self.digest = to_digest(json.dumps(self.__json__()))
     
     def __json__(self):
         """JSON representation (can be passed to a template and thus through to
@@ -158,10 +169,48 @@ class AssetGenManifest(object):
     
 
 
+def manifest_js_view(request):
+    """Lookup the manifest in the registry corresponding to the digest in the
+      request path. Return a javascript file that wraps the manifest data
+      in a ``window.assetgen.add_manifest()`` call -- using the machinery
+      in ``./coffee/assetgen.coffee``.
+    """
+    
+    # Validate.
+    digest = request.matchdict['digest']
+    if not valid_digest.match(digest):
+        raise HTTPNotFound
+    
+    # Lookup.
+    manifest = request.registry.queryUtility(IAssetGenManifest, name=digest)
+    if manifest is None:
+        raise HTTPNotFound
+    
+    # Respond.
+    response = request.response
+    response.headers['Content-Type'] = 'application/javascript'
+    response.charset = 'utf8'
+    response.text = u"window.assetgen.add_manifest({0});".format(
+            json.dumps(manifest.__json__()))
+    return response
+
+def get_assetgen_manifest_script_tag(request, asset_path):
+    """Render a script tag with the src resolving to the manfest's js view."""
+    
+    # Lookup.
+    manifest = request.assetgen_manifest(asset_path)
+    
+    # Render.
+    src = u'/_assetgen/{0}-manifest.js'.format(manifest.digest)
+    return u'<script type="text/javascript" src="{0}"></script>'.format(src)
+
+
 def get_static_url(request, is_url=None, request_cls=None):
     """Returns a manifest aware ``static_url`` function that can be used as a
       ``request.static_url``.
     """
+    
+    print 'get static url'
     
     # Test jig.
     if is_url is None:
@@ -212,17 +261,15 @@ def get_assetgen_hash(request):
       ``IAssetGenManifest`` identified by asset_path.
     """
     
-    def assetgen_hash(asset_path, get_manifest=None, to_digest=None):
+    def assetgen_hash(asset_path, get_manifest=None):
         """Get the hash of the manifest data registered for ``assets``."""
         
         # Compose
         if get_manifest is None:
             get_manifest = get_assetgen_manifest(request)
-        if to_digest is None:
-            to_digest = lambda s: hashlib.sha224(s).hexdigest()
         
-        manifest_str = get_manifest(asset_path, as_json=True)
-        return to_digest(manifest_str)
+        manifest = get_manifest(asset_path, as_json=True)
+        return manifest.digest
     
     return assetgen_hash
 
@@ -254,6 +301,11 @@ def add_assetgen_manifest(config, asset_path, manifest_file=None, default='asset
     # Register the ``AssetGenManifest`` instance against ``static_directory``.
     manifest = AssetGenManifest(manifest_file, asset_path, serving_path=serving_path)
     config.registry.registerUtility(manifest, IAssetGenManifest, name=asset_path)
+    
+    # And register it against the hash, so we can look it up from its
+    # manifest.js view.
+    digest = manifest.digest
+    config.registry.registerUtility(manifest, IAssetGenManifest, name=digest)  
 
 def includeme(config):
     """Allow developers to use ``config.include('pyramid_assetgen')`` to register
@@ -267,6 +319,15 @@ def includeme(config):
     config.set_request_property(get_static_url, 'static_url', reify=True)
     config.set_request_property(get_assetgen_manifest, 'assetgen_manifest', reify=True)
     config.set_request_property(get_assetgen_hash, 'assetgen_hash', reify=True)
+    
+    # Expose the ``_assetgen/{digest}-manifest.js`` view.
+    config.add_route('assetgen-manifest-js', '_assetgen/{digest}-manifest.js')
+    config.add_view(manifest_js_view, route_name='assetgen-manifest-js',
+            request_method='GET', permission=PUBLIC, http_cache=1209600) # 2 weeks
+    
+    # Provide ``request.assetgen_manifest_script_tag(asset_path)``.
+    config.add_request_method(get_assetgen_manifest_script_tag,
+            'assetgen_manifest_script_tag')
     
     # If ``assetgen.assets_path`` is provided in the config, register a 
     # static view with an assetgen manifest.
