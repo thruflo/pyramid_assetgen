@@ -1,4 +1,10 @@
 
+## 0.5
+
+Provide framework machinery to embed a `manifest.js` script tag, rather
+than writing the manifest's json data into the page template, thus allowing
+the request and data to be http cached.
+
 ## 0.4.3
 
 Include `.coffee` files in source distribution.
