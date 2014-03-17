@@ -11,7 +11,9 @@ try: # py2
 except ImportError: # py3
     from urllib.request import urlopen
 
+from os.path import basename
 from os.path import exists as path_exists
+from os.path import join as join_path
 
 try: # pragma: no coverage
     import urlparse
@@ -179,12 +181,17 @@ def get_assetgen_manifest_script_tag(request, asset_path, **kwargs):
     
     # Lookup.
     manifest = request.assetgen_manifest(asset_path)
+    if '://' in manifest.manifest_file:
+        url = manifest.manifest_file
+    else:
+        filename = basename(manifest.manifest_file)
+        url = join_path(manifest.serving_path, filename)
     
     # Render the <script /> tag.
     tmpl_vars = {
         'asset_path': manifest.asset_path,
         'serving_path': manifest.serving_path,
-        'url': u'{0}?v={1}'.format(manifest.manifest_file, manifest.digest),
+        'url': u'{0}?v={1}'.format(url, manifest.digest),
     }
     return render(spec, tmpl_vars, request=request)
 
