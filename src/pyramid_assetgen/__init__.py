@@ -26,6 +26,7 @@ from pyramid.asset import resolve_asset_spec
 from pyramid.decorator import reify
 from pyramid.httpexceptions import HTTPNotFound
 from pyramid.path import AssetResolver
+from pyramid.renderers import render as render_template
 from pyramid.request import Request
 from pyramid.security import NO_PERMISSION_REQUIRED as PUBLIC
 
@@ -169,40 +170,23 @@ class AssetGenManifest(object):
     
 
 
-def manifest_js_view(request):
-    """Lookup the manifest in the registry corresponding to the digest in the
-      request path. Return a javascript file that wraps the manifest data
-      in a ``window.assetgen.add_manifest()`` call -- using the machinery
-      in ``./coffee/assetgen.coffee``.
-    """
+def get_assetgen_manifest_script_tag(request, asset_path, **kwargs):
+    """Render a script tag that loads the manifest data for the asset_path."""
     
-    # Validate.
-    digest = request.matchdict['digest']
-    if not valid_digest.match(digest):
-        raise HTTPNotFound
-    
-    # Lookup.
-    manifest = request.registry.queryUtility(IAssetGenManifest, name=digest)
-    if manifest is None:
-        raise HTTPNotFound
-    
-    # Respond.
-    response = request.response
-    response.headers['Content-Type'] = 'application/javascript'
-    response.charset = 'utf8'
-    response.text = u"window.assetgen.add_manifest({0});".format(
-            json.dumps(manifest.__json__()))
-    return response
-
-def get_assetgen_manifest_script_tag(request, asset_path):
-    """Render a script tag with the src resolving to the manfest's js view."""
+    # Compose.
+    render = kwargs.get('render', render_template)
+    spec = kwargs.get('spec', u'pyramid_assetgen:templates/script_tag.mako')
     
     # Lookup.
     manifest = request.assetgen_manifest(asset_path)
     
-    # Render.
-    src = u'/_assetgen/{0}-manifest.js'.format(manifest.digest)
-    return u'<script type="text/javascript" src="{0}"></script>'.format(src)
+    # Render the <script /> tag.
+    tmpl_vars = {
+        'asset_path': manifest.asset_path,
+        'serving_path': manifest.serving_path,
+        'url': u'{0}?v={1}'.format(manifest.manifest_file, manifest.digest),
+    }
+    return render(spec, tmpl_vars, request=request)
 
 
 def get_static_url(request, is_url=None, request_cls=None):
@@ -321,11 +305,6 @@ def includeme(config):
     config.set_request_property(get_static_url, 'static_url', reify=True)
     config.set_request_property(get_assetgen_manifest, 'assetgen_manifest', reify=True)
     config.set_request_property(get_assetgen_hash, 'assetgen_hash', reify=True)
-    
-    # Expose the ``_assetgen/{digest}-manifest.js`` view.
-    config.add_route('assetgen-manifest-js', '_assetgen/{digest}-manifest.js')
-    config.add_view(manifest_js_view, route_name='assetgen-manifest-js',
-            request_method='GET', permission=PUBLIC, http_cache=1209600) # 2 weeks
     
     # Provide ``request.assetgen_manifest_script_tag(asset_path)``.
     config.add_request_method(get_assetgen_manifest_script_tag,
