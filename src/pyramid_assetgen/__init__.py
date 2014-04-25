@@ -201,8 +201,6 @@ def get_static_url(request, is_url=None, request_cls=None):
       ``request.static_url``.
     """
     
-    print 'get static url'
-    
     # Test jig.
     if is_url is None:
         is_url = is_a_url
