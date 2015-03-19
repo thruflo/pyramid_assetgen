@@ -21,7 +21,7 @@ define 'assetgen', (exports, root) ->
   
   add_manifest = (manifest) -> 
     path = manifest['asset_path']
-    if not path.endsWith('/') then path + '/' else path
+    path = if not path.endsWith('/') then path + '/' else path
     _manifests[path] = manifest
   
   static_url = (path) ->
